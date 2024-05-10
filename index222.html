@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hand Gesture Recognition</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Gugi&family=Jua&family=Moirai+One&family=Single+Day&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Gugi&family=Moirai+One&family=Single+Day&display=swap');
+    .title {
+        font-size: 150px;
+        font-family: "Jua", sans-serif;
+        margin-left: 1300px;
+        margin-top: 50px;
+    }
+
+    body {
+        background-color: aquamarine;
+    }
+    .bts {
+        font-size: 30px;
+        padding: 15px;
+        background-color: #ffff;
+        color: black;
+        border-radius: 60px;
+        text-transform: uppercase;
+        font-family: "Do Hyeon", sans-serif;
+        transition: all 0.4s;
+        position: fixed;
+        bottom: 50px;
+        left: 89%;
+        transform: translateX(-50%);
+        font-family: "Gugi", sans-serif;
+        z-index: 100; /* 다른 요소 위에 표시하기 위해 z-index 설정 */
+    }
+
+    .bts:focus {
+        outline: none;
+    }
+
+    /* 호버 효과 추가 */
+    .bts:hover {
+        background-color: #000;
+        color: white;
+    }
+
+    /* 이미지 컨테이너 스타일 */
+    #imageContainer {
+        position: fixed;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+        z-index: 1; /* 다른 요소보다 앞에 표시하기 위해 z-index 설정 */
+    }
+
+    /* 메인 이미지 스타일 */
+    #mainImage {
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+        transition: transform 0.5s ease;
+    }
+</style>
+</head>
+<body>
+<div id="imageContainer">
+    <!-- 화면에 표시될 메인 이미지 -->
+    <img id="mainImage" src="김치볶음밥.jpg" alt="Main Image"> <!-- 디폴트 이미지 설정 -->
+</div>
+<!-- TensorFlow.js 및 Handpose 모델 스크립트 추가 -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
+<script>
+    let handposeModel; // Handpose 모델을 담을 변수
+    let video; // 웹캠 영상을 담을 변수
+    let canvas; // 캔버스 요소를 담을 변수
+    let ctx; // 캔버스 컨텍스트를 담을 변수
+    let isHandDetected = false; // 손 감지 여부를 나타내는 변수
+    let images = ["김치볶음밥.jpg", "김치찌개.jpg", "냉면.jpg", "닭갈비.jpg", "돈까스.jpg", "된장찌개.jpg", "분식.jpg", "브리또.jpg", "뼈찜.jpg", "제육볶음.jpg", "짜장면.jpg", "철판볶음.jpg", "컵밥.jpg", "햄버거.jpg"]; // 이미지 배열
+    let currentIndex = 0; // 현재 이미지 인덱스
+    let initialImageSize = 100; // 초기 이미지 크기
+
+    async function setup() {
+        // 웹캠 영상을 담을 video 엘리먼트 생성
+        video = document.createElement('video');
+        video.width = 500;
+        video.height = 340;
+
+        // Handpose 모델 로드
+        handposeModel = await handpose.load();
+        console.log('Handpose model loaded.');
+
+        // 웹캠 영상 캡처 및 처리 시작
+        navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+            video.srcObject = stream; // 웹캠 영상을 video 엘리먼트의 소스로 설정
+            video.play(); // 영상 재생 시작
+        });
+
+        // video 엘리먼트가 데이터를 로드할 때마다 호출되는 이벤트 리스너 등록
+        video.addEventListener('loadeddata', () => {
+            canvas = document.createElement('canvas'); // 캔버스 엘리먼트 생성
+            canvas.width = video.width;
+            canvas.height = video.height;
+            ctx = canvas.getContext('2d'); // 캔버스 컨텍스트 설정
+            document.body.appendChild(canvas); // 캔버스 엘리먼트를 body에 추가
+            detectHand(); // 손 감지 함수 호출
+        });
+    }
+
+    // 손 감지 함수
+    async function detectHand() {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height); // 캔버스에 웹캠 영상 그리기
+        const predictions = await handposeModel.estimateHands(canvas); // Handpose 모델을 사용하여 손 감지
+
+        if (predictions.length > 0) {
+            isHandDetected = true; // 손이 감지되었음을 표시
+            const hand = predictions[0].landmarks; // 손의 랜드마크(포인트) 정보 가져오기
+            zoomImage(hand); // 이미지 확대/축소 함수 호출
+            switchImage(hand); // 이미지 전환 함수 호출
+        } else {
+            isHandDetected = false; // 손이 감지되지 않았음을 표시
+        }
+
+        requestAnimationFrame(detectHand); // 다음 프레임에서 손 감지 함수 호출
+    }
+
+    // 이미지 확대/축소 함수
+    function zoomImage(hand) {
+        if (isHandDetected) {
+            const mainImage = document.getElementById('mainImage'); // 메인 이미지 요소 가져오기
+
+            // 손 크기에 따라 이미지 확대/축소 (예시)
+            const handWidth = Math.abs(hand[5][0] - hand[17][0]); // 랜드마크 중 손의 양 끝 좌표를 이용하여 손의 크기 계산
+            const zoomFactor = handWidth / video.width; // 확대/축소 비율 계산
+
+            // 이미지를 초기 크기에서 확대/축소
+            mainImage.style.width = `${initialImageSize * zoomFactor}%`;
+            mainImage.style.height = 'auto'; // 비율 유지를 위해 높이는 자동으로 조정
+        }
+    }
+
+    // 이미지 전환 함수
+    function switchImage(hand) {
+        if (isHandDetected) {
+            const mainImage = document.getElementById('mainImage'); // 메인 이미지 요소 가져오기
+
+            // 손바닥의 좌표 변화를 판단하여 이미지 전환 (손바닥이 좌에서 우로 이동했을 때 이미지 전환)
+            const palmLeftX = hand[9][0]; // 손바닥 중간의 좌측 X 좌표
+            const palmRightX = hand[13][0]; // 손바닥 중간의 우측 X 좌표
+
+            if (palmLeftX < palmRightX) { // 손바닥이 좌에서 우로 이동했을 때
+                currentIndex = (currentIndex + 1) % images.length; // 다음 이미지 인덱스로 변경
+                mainImage.src = images[currentIndex]; // 이미지 변경
+            }
+        }   
+    }
+
+    setup(); // 초기화 함수 호출
+</script>
+<button type="button" class="bts bts-success me-1" onclick="location.href='index333.html'">계속돌려도 모르겠다?</button>
+<h5 class="title">당신이 오늘 먹을 음식은?</h5>
+</body>
+</html>
